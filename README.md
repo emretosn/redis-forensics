@@ -68,12 +68,74 @@ systemd timer (push model → keeps evidence on a separate host for chain-of-cus
 # 1. Generate the collector keypair (VM -> collector transfer)
 ./scripts/gen-collector-key.sh
 
-# 2. Deploy
+# 2. Deploy (stages keys, detects your IP, generates ACL passwords, deploys)
 ./deploy.sh
 ```
 
-> Deployment steps and a validation walkthrough are documented at the bottom of this
-> file once the templates are complete.
+`deploy.sh` prints the client/forensics public IPs and ready-to-use SSH commands,
+and writes the generated Redis ACL passwords to `secrets/passwords.env` (git-ignored).
+
+### Environment overrides for `deploy.sh`
+
+| Variable               | Default                 | Purpose                                  |
+| ---------------------- | ----------------------- | ---------------------------------------- |
+| `RG_NAME`              | `redis-forensics-rg`    | Resource group name                      |
+| `LOCATION`             | `westeurope`            | Azure region                             |
+| `ADMIN_PUBKEY_PATH`    | `~/.ssh/id_rsa.pub`     | Admin SSH public key                     |
+| `ADMIN_SOURCE_ADDRESS` | auto-detected `/32`     | Source IP/CIDR allowed to SSH            |
+| `REDIS_*_PASS`         | generated (hex)         | reader / writer / admin ACL passwords    |
+
+## Validation walkthrough
+
+After the VMs finish cloud-init (give them ~3–5 minutes):
+
+```bash
+# SSH into the client VM (redis-vm is private-only; reach it via the VNet)
+ssh azureuser@<client-public-ip>
+
+# Normal, authorized activity (recorded across MONITOR / SLOWLOG / AOF)
+redis-query.sh writer SET key9 hello
+redis-query.sh reader GET key9
+redis-query.sh reader SMEMBERS set1
+
+# Unauthorized activity -> denied and captured in ACL LOG with user attribution
+redis-query.sh reader FLUSHALL      # NOPERM
+redis-query.sh writer FLUSHALL      # NOPERM
+```
+
+Then confirm the forensic artifacts landed on the collector:
+
+```bash
+ssh azureuser@<forensics-public-ip>
+sudo ls -R /var/forensics-store/redis-vm
+#   forensics/monitor/    -> continuous MONITOR capture
+#   forensics/config/     -> periodic CONFIG GET snapshots
+#   forensics/acl/        -> exported ACL LOG (denied FLUSHALL attempts)
+#   forensics/slowlog/    -> exported SLOWLOG
+#   data/                 -> dump.rdb + appendonly.aof
+#   log/                  -> redis-server.log (verbose)
+```
+
+The `redis-vm` pushes these every 5 minutes via a systemd timer
+(`redis-forensic-sync.timer`); MONITOR capture runs continuously
+(`redis-forensic-monitor.service`).
+
+## Mapping to the paper (Section VI recommendations)
+
+| Section VI recommendation                | Where it's implemented                                   |
+| ---------------------------------------- | -------------------------------------------------------- |
+| Enable high-verbosity server logging     | `redis/redis.conf.tmpl` — `loglevel verbose`             |
+| Continuously capture & store MONITOR     | `scripts/forensic-monitor.sh` + systemd service          |
+| Preserve AOF and RDB files               | `appendonly yes` + `save`; synced via `forensic-sync.sh` |
+| Schedule periodic CONFIG GET snapshots   | `scripts/forensic-config-snap.sh` + systemd timer        |
+| ACL attribution / ACL LOG                | `redis/users.acl` (reader/writer/admin) + sync export    |
+| SLOWLOG capturing all commands           | `slowlog-log-slower-than 0`; exported by `forensic-sync` |
+
+## Teardown
+
+```bash
+az group delete --name redis-forensics-rg --yes
+```
 
 ## License / attribution
 
