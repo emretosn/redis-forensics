@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # gen-collector-key.sh
-# Generate a dedicated SSH keypair used only for redis-vm -> forensics-vm evidence
+# Generate a dedicated SSH keypair used only for redis-vm to forensics-vm evidence
 # transfer. Keys are written to secrets/ (git-ignored). Idempotent: won't clobber.
 set -euo pipefail
 
@@ -12,13 +12,13 @@ mkdir -p "$SECRETS_DIR"
 chmod 700 "$SECRETS_DIR"
 
 if [ -f "$KEY_PATH" ]; then
-  echo "collector key already exists at ${KEY_PATH} — leaving it untouched."
+  echo "Collector key already exists at ${KEY_PATH}, leaving it untouched."
   exit 0
 fi
 
 ssh-keygen -t ed25519 -N '' -C 'redis-forensics-collector' -f "$KEY_PATH"
 chmod 600 "$KEY_PATH"
 chmod 644 "${KEY_PATH}.pub"
-echo "generated collector keypair:"
-echo "  private: ${KEY_PATH}"
-echo "  public : ${KEY_PATH}.pub"
+echo "Generated collector keypair:"
+echo "  Private: ${KEY_PATH}"
+echo "  Public : ${KEY_PATH}.pub"

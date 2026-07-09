@@ -5,7 +5,7 @@
 # Prereqs: az CLI logged in (az login). Existing SSH pubkey at ~/.ssh/id_ed25519.pub.
 #
 # Environment overrides (all optional):
-#   RG_NAME              resource group name        (default: redis-forensics-rg)
+#   RG_NAME              resource group name        (default: rg-redis-forensics)
 #   LOCATION             azure region               (default: westeurope)
 #   ADMIN_PUBKEY_PATH    admin SSH public key       (default: ~/.ssh/id_ed25519.pub)
 #   ADMIN_SOURCE_ADDRESS your SSH source IP/CIDR    (default: auto-detected)
@@ -15,7 +15,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$REPO_ROOT"
 
-RG_NAME="${RG_NAME:-redis-forensics-rg}"
+RG_NAME="${RG_NAME:-rg-redis-forensics}"
 LOCATION="${LOCATION:-westeurope}"
 ADMIN_PUBKEY_PATH="${ADMIN_PUBKEY_PATH:-$HOME/.ssh/id_ed25519.pub}"
 SECRETS_DIR="${REPO_ROOT}/secrets"

@@ -1,24 +1,16 @@
 # Redis Forensic-Readiness Lab on Azure
 
-Infrastructure-as-Code (Bicep) for a small Azure lab that reproduces the
-forensic-readiness setup described in **"Database Forensics Readiness: An
-Examination of Redis"** (Zia & Adedayo, *ISDFS 2026*), focusing on the
-**Section VI — Discussion of Findings** recommendations.
+Infrastructure-as-Code (Bicep) for a small Azure lab that produces a forensic-readiness setup.
 
 ## What this builds
 
 Three Ubuntu 22.04 VMs (`Standard_B1s`) in a single VNet in `westeurope`:
 
-| VM             | Role                                                            | Public IP |
+| VM             | Role                                                           | Public IP |
 | -------------- | -------------------------------------------------------------- | --------- |
 | `redis-vm`     | Redis installed **in the VM**, configured as a forensic source | No        |
 | `client-vm`    | Issues CRUD requests to Redis using ACL role users             | Yes (SSH) |
 | `forensics-vm` | Collector — receives forensic files pushed from `redis-vm`     | Yes (SSH) |
-
-```
-   client-vm ──6379──▶ redis-vm ──rsync/ssh timer──▶ forensics-vm
-   (public IP)         (private only)                (public IP)
-```
 
 ## Forensic features (from the paper, Section VI)
 
@@ -79,7 +71,7 @@ and writes the generated Redis ACL passwords to `secrets/passwords.env` (git-ign
 
 | Variable               | Default                 | Purpose                                  |
 | ---------------------- | ----------------------- | ---------------------------------------- |
-| `RG_NAME`              | `redis-forensics-rg`    | Resource group name                      |
+| `RG_NAME`              | `rg-redis-forensics`    | Resource group name                      |
 | `LOCATION`             | `westeurope`            | Azure region                             |
 | `ADMIN_PUBKEY_PATH`    | `~/.ssh/id_ed25519.pub` | Admin SSH public key                     |
 | `ADMIN_SOURCE_ADDRESS` | auto-detected `/32`     | Source IP/CIDR allowed to SSH            |
@@ -98,7 +90,7 @@ redis-query.sh writer SET key9 hello
 redis-query.sh reader GET key9
 redis-query.sh reader SMEMBERS set1
 
-# Unauthorized activity -> denied and captured in ACL LOG with user attribution
+# Unauthorized activity, denied and captured in ACL LOG with user attribution
 redis-query.sh reader FLUSHALL      # NOPERM
 redis-query.sh writer FLUSHALL      # NOPERM
 ```
@@ -120,24 +112,8 @@ The `redis-vm` pushes these every 5 minutes via a systemd timer
 (`redis-forensic-sync.timer`); MONITOR capture runs continuously
 (`redis-forensic-monitor.service`).
 
-## Mapping to the paper (Section VI recommendations)
-
-| Section VI recommendation                | Where it's implemented                                   |
-| ---------------------------------------- | -------------------------------------------------------- |
-| Enable high-verbosity server logging     | `redis/redis.conf.tmpl` — `loglevel verbose`             |
-| Continuously capture & store MONITOR     | `scripts/forensic-monitor.sh` + systemd service          |
-| Preserve AOF and RDB files               | `appendonly yes` + `save`; synced via `forensic-sync.sh` |
-| Schedule periodic CONFIG GET snapshots   | `scripts/forensic-config-snap.sh` + systemd timer        |
-| ACL attribution / ACL LOG                | `redis/users.acl` (reader/writer/admin) + sync export    |
-| SLOWLOG capturing all commands           | `slowlog-log-slower-than 0`; exported by `forensic-sync` |
-
 ## Teardown
 
 ```bash
 az group delete --name redis-forensics-rg --yes
 ```
-
-## License / attribution
-
-Lab derived from the methodology and recommendations of Zia & Adedayo (ISDFS 2026).
-For research and educational use.
