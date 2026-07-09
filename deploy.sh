@@ -2,12 +2,12 @@
 # deploy.sh
 # Stage secrets/keys, then deploy the Redis forensic-readiness lab to Azure.
 #
-# Prereqs: az CLI logged in (az login). Existing SSH pubkey at ~/.ssh/id_rsa.pub.
+# Prereqs: az CLI logged in (az login). Existing SSH pubkey at ~/.ssh/id_ed25519.pub.
 #
 # Environment overrides (all optional):
 #   RG_NAME              resource group name        (default: redis-forensics-rg)
 #   LOCATION             azure region               (default: westeurope)
-#   ADMIN_PUBKEY_PATH    admin SSH public key       (default: ~/.ssh/id_rsa.pub)
+#   ADMIN_PUBKEY_PATH    admin SSH public key       (default: ~/.ssh/id_ed25519.pub)
 #   ADMIN_SOURCE_ADDRESS your SSH source IP/CIDR    (default: auto-detected)
 #   REDIS_READER_PASS / REDIS_WRITER_PASS / REDIS_ADMIN_PASS (default: generated)
 set -euo pipefail
@@ -17,7 +17,7 @@ cd "$REPO_ROOT"
 
 RG_NAME="${RG_NAME:-redis-forensics-rg}"
 LOCATION="${LOCATION:-westeurope}"
-ADMIN_PUBKEY_PATH="${ADMIN_PUBKEY_PATH:-$HOME/.ssh/id_rsa.pub}"
+ADMIN_PUBKEY_PATH="${ADMIN_PUBKEY_PATH:-$HOME/.ssh/id_ed25519.pub}"
 SECRETS_DIR="${REPO_ROOT}/secrets"
 
 mkdir -p "$SECRETS_DIR"; chmod 700 "$SECRETS_DIR"

@@ -10,7 +10,7 @@ param namePrefix = 'redisfx'
 param adminUsername = 'azureuser'
 param vmSize = 'Standard_B1s'
 
-// Admin SSH public key (staged from ~/.ssh/id_rsa.pub by deploy.sh).
+// Admin SSH public key (staged from ~/.ssh/id_ed25519.pub by deploy.sh).
 param adminPublicKey = loadTextContent('secrets/admin_key.pub')
 
 // Your public IP/CIDR allowed to SSH into client & forensics VMs.

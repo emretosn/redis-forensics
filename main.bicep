@@ -17,7 +17,7 @@ param namePrefix string = 'redisfx'
 @description('Admin username for SSH login on all VMs.')
 param adminUsername string = 'azureuser'
 
-@description('SSH public key for the admin user (contents of ~/.ssh/id_rsa.pub).')
+@description('SSH public key for the admin user (contents of ~/.ssh/id_ed25519.pub).')
 param adminPublicKey string
 
 @description('Public IP/CIDR allowed to SSH into the client & forensics VMs.')

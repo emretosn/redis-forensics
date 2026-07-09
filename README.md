@@ -60,7 +60,7 @@ systemd timer (push model → keeps evidence on a separate host for chain-of-cus
 ## Prerequisites
 
 - Azure CLI (`az`) with Bicep, logged in (`az login`)
-- An existing SSH public key at `~/.ssh/id_rsa.pub`
+- An existing SSH public key at `~/.ssh/id_ed25519.pub`
 
 ## Quick start
 
@@ -81,7 +81,7 @@ and writes the generated Redis ACL passwords to `secrets/passwords.env` (git-ign
 | ---------------------- | ----------------------- | ---------------------------------------- |
 | `RG_NAME`              | `redis-forensics-rg`    | Resource group name                      |
 | `LOCATION`             | `westeurope`            | Azure region                             |
-| `ADMIN_PUBKEY_PATH`    | `~/.ssh/id_rsa.pub`     | Admin SSH public key                     |
+| `ADMIN_PUBKEY_PATH`    | `~/.ssh/id_ed25519.pub` | Admin SSH public key                     |
 | `ADMIN_SOURCE_ADDRESS` | auto-detected `/32`     | Source IP/CIDR allowed to SSH            |
 | `REDIS_*_PASS`         | generated (hex)         | reader / writer / admin ACL passwords    |
 
