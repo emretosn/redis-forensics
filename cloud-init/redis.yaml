@@ -1,0 +1,135 @@
+#cloud-config
+# =============================================================================
+# redis-vm first-boot configuration.
+# Installs Redis from the official APT repo and configures it as a forensic
+# evidence source (Section VI recommendations). Placeholders ending in _B64 are
+# filled in by main.bicep with base64-encoded file contents.
+# =============================================================================
+package_update: true
+package_upgrade: false
+
+write_files:
+  # --- forensic runtime config (host, admin creds, collector target) ---------
+  - path: /etc/redis-forensics/forensics.env
+    permissions: '0600'
+    owner: root:root
+    encoding: b64
+    content: __ENV_B64__
+
+  # --- Redis server config + ACL users (passwords/bind IP pre-substituted) ---
+  - path: /etc/redis/redis.conf
+    permissions: '0640'
+    owner: root:root
+    encoding: b64
+    content: __REDIS_CONF_B64__
+
+  - path: /etc/redis/users.acl
+    permissions: '0640'
+    owner: root:root
+    encoding: b64
+    content: __USERS_ACL_B64__
+
+  # --- SSH private key used to push evidence to the forensics collector ------
+  - path: /etc/redis-forensics/collector_key
+    permissions: '0600'
+    owner: root:root
+    encoding: b64
+    content: __COLLECTOR_KEY_B64__
+
+  # --- forensic collection scripts -------------------------------------------
+  - path: /usr/local/bin/forensic-monitor.sh
+    permissions: '0755'
+    encoding: b64
+    content: __MONITOR_B64__
+  - path: /usr/local/bin/forensic-config-snap.sh
+    permissions: '0755'
+    encoding: b64
+    content: __CONFIGSNAP_B64__
+  - path: /usr/local/bin/forensic-sync.sh
+    permissions: '0755'
+    encoding: b64
+    content: __SYNC_B64__
+  - path: /usr/local/bin/seed-data.sh
+    permissions: '0755'
+    encoding: b64
+    content: __SEED_B64__
+
+  # --- systemd units (static) ------------------------------------------------
+  - path: /etc/systemd/system/redis-forensic-monitor.service
+    content: |
+      [Unit]
+      Description=Redis continuous MONITOR capture
+      After=redis-server.service
+      Requires=redis-server.service
+      [Service]
+      Type=simple
+      ExecStart=/usr/local/bin/forensic-monitor.sh
+      Restart=always
+      RestartSec=5
+      [Install]
+      WantedBy=multi-user.target
+
+  - path: /etc/systemd/system/redis-forensic-config-snap.service
+    content: |
+      [Unit]
+      Description=Redis CONFIG GET snapshot
+      After=redis-server.service
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/bin/forensic-config-snap.sh
+
+  - path: /etc/systemd/system/redis-forensic-config-snap.timer
+    content: |
+      [Unit]
+      Description=Run Redis CONFIG snapshot every 5 minutes
+      [Timer]
+      OnBootSec=2min
+      OnUnitActiveSec=5min
+      [Install]
+      WantedBy=timers.target
+
+  - path: /etc/systemd/system/redis-forensic-sync.service
+    content: |
+      [Unit]
+      Description=Push Redis forensic artifacts to collector
+      After=redis-server.service
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/bin/forensic-sync.sh
+
+  - path: /etc/systemd/system/redis-forensic-sync.timer
+    content: |
+      [Unit]
+      Description=Sync Redis forensic artifacts every 5 minutes
+      [Timer]
+      OnBootSec=3min
+      OnUnitActiveSec=5min
+      [Install]
+      WantedBy=timers.target
+
+runcmd:
+  # 1. Install Redis from the official Redis APT repository.
+  - install -m 0755 -d /usr/share/keyrings
+  - curl -fsSL https://packages.redis.io/gpg -o /tmp/redis.gpg
+  - gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg /tmp/redis.gpg
+  - chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg
+  - echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" > /etc/apt/sources.list.d/redis.list
+  - apt-get update
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y redis rsync
+
+  # 2. Fix ownership/permissions for Redis-managed files and dirs.
+  - mkdir -p /var/log/redis /var/lib/redis /var/forensics
+  - chown -R redis:redis /etc/redis/redis.conf /etc/redis/users.acl /var/log/redis /var/lib/redis
+  - chmod 750 /var/forensics
+
+  # 3. Start Redis with our config, then seed simple key:value data.
+  - systemctl enable redis-server
+  - systemctl restart redis-server
+  - sleep 3
+  - /usr/local/bin/seed-data.sh || true
+
+  # 4. Enable forensic collection: continuous MONITOR + periodic snapshot/sync.
+  - systemctl daemon-reload
+  - systemctl enable --now redis-forensic-monitor.service
+  - systemctl enable --now redis-forensic-config-snap.timer
+  - systemctl enable --now redis-forensic-sync.timer

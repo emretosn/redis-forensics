@@ -1,0 +1,23 @@
+#cloud-config
+# =============================================================================
+# client-vm first-boot configuration.
+# Installs redis-tools and a helper for issuing CRUD requests to redis-vm as
+# reader / writer / admin ACL roles. Placeholders ending in _B64 are filled in
+# by main.bicep.
+# =============================================================================
+package_update: true
+
+write_files:
+  - path: /etc/redis-forensics/client.env
+    permissions: '0600'
+    owner: root:root
+    encoding: b64
+    content: __CLIENT_ENV_B64__
+  - path: /usr/local/bin/redis-query.sh
+    permissions: '0755'
+    encoding: b64
+    content: __QUERY_B64__
+
+runcmd:
+  - apt-get update
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y redis-tools

@@ -1,0 +1,35 @@
+#cloud-config
+# =============================================================================
+# forensics-vm first-boot configuration.
+# Creates a 'collector' user whose SSH authorized_keys accepts the redis-vm
+# collector key, and prepares the evidence store directory. redis-vm pushes
+# forensic artifacts here via rsync over SSH. The __COLLECTOR_PUBKEY__
+# placeholder is substituted by main.bicep.
+# =============================================================================
+package_update: true
+
+users:
+  - default
+  - name: collector
+    gecos: Redis forensic evidence collector
+    shell: /bin/bash
+    sudo: false
+    lock_passwd: true
+    ssh_authorized_keys:
+      - __COLLECTOR_PUBKEY__
+
+write_files:
+  - path: /etc/systemd/system/forensics-store.service
+    content: |
+      [Unit]
+      Description=Prepare forensic evidence store
+      [Service]
+      Type=oneshot
+      ExecStart=/bin/bash -c 'mkdir -p /var/forensics-store && chown -R collector:collector /var/forensics-store && chmod 750 /var/forensics-store'
+
+runcmd:
+  - apt-get update
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y rsync
+  - mkdir -p /var/forensics-store
+  - chown -R collector:collector /var/forensics-store
+  - chmod 750 /var/forensics-store
