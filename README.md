@@ -19,7 +19,6 @@ Three Ubuntu 22.04 VMs (`Standard_B1s`) in a single VNet in `westeurope`:
 - **AOF + RDB preserved** — `appendonly yes` and `save` snapshots, synced to the collector.
 - **Periodic CONFIG GET snapshots** — systemd timer writing timestamped `CONFIG GET *` dumps.
 - **ACL roles** — `reader` / `writer` / `admin`, enabling **ACL LOG** attribution of denied actions.
-- **SLOWLOG** — `slowlog-log-slower-than 0` captures all commands.
 - **Simple seed data** — a handful of plain `key:value` pairs.
 
 Forensic files are pushed from `redis-vm` to `forensics-vm` via `rsync` over SSH on a
@@ -38,7 +37,7 @@ systemd timer (push model → keeps evidence on a separate host for chain-of-cus
 │   ├── client.yaml
 │   └── forensics.yaml
 ├── redis/
-│   ├── redis.conf.tmpl         # verbose, AOF, RDB, slowlog=0, bind
+│   ├── redis.conf.tmpl         # verbose, AOF, RDB, bind
 │   └── users.acl               # reader / writer / admin
 ├── scripts/
 │   ├── gen-collector-key.sh    # generate collector SSH keypair
@@ -85,7 +84,7 @@ After the VMs finish cloud-init (give them ~3–5 minutes):
 # SSH into the client VM (redis-vm is private-only; reach it via the VNet)
 ssh azureuser@<client-public-ip>
 
-# Normal, authorized activity (recorded across MONITOR / SLOWLOG / AOF)
+# Normal, authorized activity (recorded across MONITOR / AOF)
 redis-query.sh writer SET key9 hello
 redis-query.sh reader GET key9
 redis-query.sh reader SMEMBERS set1
@@ -103,7 +102,6 @@ sudo ls -R /var/forensics-store/redis-vm
 #   forensics/monitor/    -> continuous MONITOR capture
 #   forensics/config/     -> periodic CONFIG GET snapshots
 #   forensics/acl/        -> exported ACL LOG (denied FLUSHALL attempts)
-#   forensics/slowlog/    -> exported SLOWLOG
 #   data/                 -> dump.rdb + appendonly.aof
 #   log/                  -> redis-server.log (verbose)
 ```

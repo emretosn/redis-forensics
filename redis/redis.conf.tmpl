@@ -7,7 +7,6 @@
 # Implements the Section VI recommendations from Zia & Adedayo (ISDFS 2026):
 #   - verbose server logging
 #   - AOF + RDB persistence preserved
-#   - SLOWLOG capturing all commands
 #   - ACL enforcement (see users.acl) for attribution via ACL LOG
 # =============================================================================
 
@@ -25,11 +24,6 @@ aclfile /etc/redis/users.acl
 # --- Logging (Section VI: high-verbosity server logging) ---------------------
 loglevel verbose
 logfile /var/log/redis/redis-server.log
-
-# --- SLOWLOG (capture every command) -----------------------------------------
-# Threshold of 0 microseconds logs all commands, per the paper's methodology.
-slowlog-log-slower-than 0
-slowlog-max-len 1024
 
 # --- RDB persistence (Section VI: preserve RDB) ------------------------------
 # Save a point-in-time snapshot on these thresholds; also triggerable via SAVE/BGSAVE.

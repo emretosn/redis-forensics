@@ -29,9 +29,8 @@ rc() {
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 
 # 1. Export volatile artifacts that are only held in memory.
-mkdir -p "${FORENSICS_DIR}/acl" "${FORENSICS_DIR}/slowlog"
-rc ACL LOG        > "${FORENSICS_DIR}/acl/acl-log-${TS}.txt"
-rc SLOWLOG GET 128 > "${FORENSICS_DIR}/slowlog/slowlog-${TS}.txt"
+mkdir -p "${FORENSICS_DIR}/acl"
+rc ACL LOG > "${FORENSICS_DIR}/acl/acl-log-${TS}.txt"
 
 # 2. Trigger a fresh RDB snapshot so the on-disk copy reflects current state.
 rc BGSAVE >/dev/null || true
