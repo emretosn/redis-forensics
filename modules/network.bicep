@@ -251,3 +251,6 @@ output forensicsNicId string = forensicsNic.id
 output redisPrivateIp string = redisPrivateIp
 output clientPrivateIp string = clientPrivateIp
 output forensicsPrivateIp string = forensicsPrivateIp
+
+output clientPublicIp string = clientPip.properties.ipAddress
+output forensicsPublicIp string = forensicsPip.properties.ipAddress
