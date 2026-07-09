@@ -1,0 +1,23 @@
+# =============================================================================
+# Redis ACL users — reader / writer / admin
+#
+# Placeholders substituted by cloud-init on first boot:
+#   __READER_PASS__ / __WRITER_PASS__ / __ADMIN_PASS__
+#
+# Roles mirror the paper's methodology so ACL LOG can attribute denied actions:
+#   reader  -> read-only, safe operations (GET, SCARD, SMEMBERS)
+#   writer  -> read + write (SET, SADD, ZADD, XADD) but NOT destructive (no FLUSHALL/FLUSHDB)
+#   admin   -> full access (administrative + destructive)
+# =============================================================================
+
+# Disable the default user so all access requires an authenticated role.
+user default off
+
+# reader: keyspace-wide read access to all keys and pub/sub channels.
+user reader on >__READER_PASS__ ~* &* +@read
+
+# writer: read + write, but destructive flush commands are explicitly denied.
+user writer on >__WRITER_PASS__ ~* &* +@read +@write -flushall -flushdb -@dangerous
+
+# admin: full command set, including administrative and destructive operations.
+user admin on >__ADMIN_PASS__ ~* &* +@all

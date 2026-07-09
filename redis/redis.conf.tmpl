@@ -1,0 +1,45 @@
+# =============================================================================
+# Redis forensic-readiness configuration (template)
+#
+# Placeholders substituted by cloud-init on first boot:
+#   __BIND_IP__   -> the VM's private IP address
+#
+# Implements the Section VI recommendations from Zia & Adedayo (ISDFS 2026):
+#   - verbose server logging
+#   - AOF + RDB persistence preserved
+#   - SLOWLOG capturing all commands
+#   - ACL enforcement (see users.acl) for attribution via ACL LOG
+# =============================================================================
+
+# --- Network -----------------------------------------------------------------
+# Bind to loopback + the private VNet IP only. Redis is NOT exposed publicly;
+# the NSG additionally restricts 6379 to the VNet.
+bind 127.0.0.1 __BIND_IP__
+port 6379
+protected-mode yes
+
+# --- Security / ACL ----------------------------------------------------------
+# User definitions live in a dedicated ACL file (reader / writer / admin).
+aclfile /etc/redis/users.acl
+
+# --- Logging (Section VI: high-verbosity server logging) ---------------------
+loglevel verbose
+logfile /var/log/redis/redis-server.log
+
+# --- SLOWLOG (capture every command) -----------------------------------------
+# Threshold of 0 microseconds logs all commands, per the paper's methodology.
+slowlog-log-slower-than 0
+slowlog-max-len 1024
+
+# --- RDB persistence (Section VI: preserve RDB) ------------------------------
+# Save a point-in-time snapshot on these thresholds; also triggerable via SAVE/BGSAVE.
+save 900 1
+save 300 10
+save 60 10000
+dbfilename dump.rdb
+dir /var/lib/redis
+
+# --- AOF persistence (Section VI: preserve AOF) ------------------------------
+appendonly yes
+appendfilename "appendonly.aof"
+appendfsync everysec
