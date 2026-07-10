@@ -68,13 +68,18 @@ and writes the generated Redis ACL passwords to `secrets/passwords.env` (git-ign
 
 ### Environment overrides for `deploy.sh`
 
-| Variable               | Default                 | Purpose                                  |
-| ---------------------- | ----------------------- | ---------------------------------------- |
-| `RG_NAME`              | `rg-redis-forensics`    | Resource group name                      |
-| `LOCATION`             | `westeurope`            | Azure region                             |
-| `ADMIN_PUBKEY_PATH`    | `~/.ssh/id_ed25519.pub` | Admin SSH public key                     |
-| `ADMIN_SOURCE_ADDRESS` | auto-detected `/32`     | Source IP/CIDR allowed to SSH            |
-| `REDIS_*_PASS`         | generated (hex)         | reader / writer / admin ACL passwords    |
+| Variable                   | Default                    | Purpose                                     |
+| -------------------------- | -------------------------- | ------------------------------------------- |
+| `RG_NAME`                  | `rg-redis-forensics`       | Resource group name                         |
+| `LOCATION`                 | `westeurope`               | Azure region                                |
+| `ADMIN_PUBKEY_PATH`        | `~/.ssh/id_ed25519.pub`    | Admin SSH public key                        |
+| `ADMIN_SOURCE_ADDRESS`     | auto-detected, widened     | Source IP/CIDR allowed to SSH               |
+| `ADMIN_SOURCE_PREFIX_BITS` | `23`                       | Widening of the auto-detected IP (`32`=exact) |
+| `REDIS_*_PASS`             | generated (hex)            | reader / writer / admin ACL passwords       |
+
+By default the auto-detected public IP is widened to its containing `/23` so SSH keeps
+working if your egress IP drifts within a NAT pool during a test. Set
+`ADMIN_SOURCE_PREFIX_BITS=32` for an exact pin, or pass `ADMIN_SOURCE_ADDRESS` directly.
 
 ## Validation walkthrough
 

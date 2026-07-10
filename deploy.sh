@@ -33,9 +33,20 @@ cp "$ADMIN_PUBKEY_PATH" "${SECRETS_DIR}/admin_key.pub"
 "${REPO_ROOT}/scripts/gen-collector-key.sh"
 
 # --- 3. Determine SSH source address ----------------------------------------
+# Your egress IP can drift within a NAT pool. To keep SSH working across a test
+# deployment, the auto-detected IP is widened to its containing /23 by default.
+# Override ADMIN_SOURCE_ADDRESS to pin an exact value (e.g. a /32 for production),
+# or set ADMIN_SOURCE_PREFIX_BITS to change the widening (e.g. 32 = no widening).
 if [ -z "${ADMIN_SOURCE_ADDRESS:-}" ]; then
-  ADMIN_SOURCE_ADDRESS="$(curl -fsSL https://api.ipify.org)/32"
-  echo "auto-detected ADMIN_SOURCE_ADDRESS=${ADMIN_SOURCE_ADDRESS}"
+  PREFIX_BITS="${ADMIN_SOURCE_PREFIX_BITS:-23}"
+  DETECTED_IP="$(curl -fsSL https://api.ipify.org)"
+  if [ "$PREFIX_BITS" -eq 23 ]; then
+    IFS=. read -r o1 o2 o3 _o4 <<< "$DETECTED_IP"
+    ADMIN_SOURCE_ADDRESS="${o1}.${o2}.$(( o3 & 0xFE )).0/23"
+  else
+    ADMIN_SOURCE_ADDRESS="${DETECTED_IP}/${PREFIX_BITS}"
+  fi
+  echo "auto-detected IP ${DETECTED_IP} -> ADMIN_SOURCE_ADDRESS=${ADMIN_SOURCE_ADDRESS}"
 fi
 export ADMIN_SOURCE_ADDRESS
 
