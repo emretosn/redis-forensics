@@ -28,15 +28,21 @@ rc() {
 
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 
-# 1. Export volatile artifacts that are only held in memory.
+# 1. Export volatile artifacts that are only held in memory. This is best-effort:
+#    if Redis is momentarily unreachable it must NOT stop us from shipping the
+#    already-persisted on-disk evidence (AOF/RDB/logs) below.
 mkdir -p "${FORENSICS_DIR}/acl"
-rc ACL LOG > "${FORENSICS_DIR}/acl/acl-log-${TS}.txt"
+if rc PING >/dev/null 2>&1; then
+  rc ACL LOG > "${FORENSICS_DIR}/acl/acl-log-${TS}.txt" \
+    || echo "warn: ACL LOG export failed" >&2
+  # Trigger a fresh RDB snapshot so the on-disk copy reflects current state.
+  rc BGSAVE >/dev/null || true
+else
+  echo "warn: Redis unreachable at ${REDIS_HOST}:${REDIS_PORT}; shipping on-disk artifacts only" >&2
+fi
 
-# 2. Trigger a fresh RDB snapshot so the on-disk copy reflects current state.
-rc BGSAVE >/dev/null || true
-
-# 3. Push everything to the collector. --append-verify is safe for the growing
-#    MONITOR/AOF logs; -a preserves timestamps/permissions for chain-of-custody.
+# 2. Push everything to the collector (runs regardless of Redis state).
+#    -a preserves timestamps/permissions for chain-of-custody.
 SSH_OPTS="ssh -i ${COLLECTOR_KEY} -o StrictHostKeyChecking=accept-new -o BatchMode=yes"
 
 rsync -a --mkpath -e "$SSH_OPTS" \

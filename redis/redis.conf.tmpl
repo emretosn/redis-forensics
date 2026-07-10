@@ -16,6 +16,11 @@ bind 127.0.0.1 __BIND_IP__
 port 6379
 protected-mode yes
 
+# --- Process supervision -----------------------------------------------------
+# The packaged systemd unit is Type=notify; Redis must tell systemd it is ready,
+# otherwise systemd times out the start and kills/restarts Redis in a loop.
+supervised systemd
+
 # --- Security / ACL ----------------------------------------------------------
 # User definitions live in a dedicated ACL file (reader / writer / admin).
 aclfile /etc/redis/users.acl
