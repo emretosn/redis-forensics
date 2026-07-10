@@ -95,12 +95,9 @@ var redisCustomData = base64(replace(replace(replace(replace(replace(replace(rep
 
 // --- cloud-init assembly: client-vm ------------------------------------------
 
-var clientEnvB64 = base64(replace(replace(replace(replace(
+var clientEnvB64 = base64(replace(
   loadTextContent('cloud-init/client.env.tmpl'),
-  '__REDIS_HOST__', net.outputs.redisPrivateIp),
-  '__READER_PASS__', readerPassword),
-  '__WRITER_PASS__', writerPassword),
-  '__ADMIN_PASS__', adminPassword))
+  '__REDIS_HOST__', net.outputs.redisPrivateIp))
 
 var queryB64 = base64(loadTextContent('scripts/redis-query.sh'))
 

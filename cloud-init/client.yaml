@@ -9,7 +9,7 @@ package_update: true
 
 write_files:
   - path: /etc/redis-forensics/client.env
-    permissions: '0600'
+    permissions: '0644'
     owner: root:root
     encoding: b64
     content: __CLIENT_ENV_B64__

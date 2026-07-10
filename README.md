@@ -88,16 +88,41 @@ After the VMs finish cloud-init (give them ~3–5 minutes):
 ```bash
 # SSH into the client VM (redis-vm is private-only; reach it via the VNet)
 ssh azureuser@<client-public-ip>
+```
+
+No Redis passwords are stored on the client VM — each user authenticates with
+their own credential at runtime (the deployer distributes them from
+`secrets/passwords.env`). "Log in" as a role for the current shell session, then
+run commands (Redis ACL enforces the role and logs any denial):
+
+```bash
+# --- log in as writer for this shell session (password is NOT echoed) ---
+read -rs REDIS_PASS && export REDIS_PASS      # paste the writer password
 
 # Normal, authorized activity (recorded across MONITOR / AOF)
 redis-query.sh writer SET key9 hello
+redis-query.sh writer GET key9
+
+# --- switch to reader: re-enter with the reader password ---
+read -rs REDIS_PASS && export REDIS_PASS      # paste the reader password
 redis-query.sh reader GET key9
 redis-query.sh reader SMEMBERS set1
 
 # Unauthorized activity, denied and captured in ACL LOG with user attribution
-redis-query.sh reader FLUSHALL      # NOPERM
-redis-query.sh writer FLUSHALL      # NOPERM
+redis-query.sh reader FLUSHALL      # NOPERM (reader lacks FLUSHALL)
+
+unset REDIS_PASS                     # "log out" of the session
 ```
+
+Alternatively, open an authenticated interactive Redis session (prompts once, no
+stored secret) and type commands at the `10.0.1.4:6379>` prompt:
+
+```bash
+redis-cli -h 10.0.1.4 --user reader --askpass
+```
+
+If you skip the session login, `redis-query.sh` prompts for the password on each
+call. Passwords are never written to disk on the client VM.
 
 Then confirm the forensic artifacts landed on the collector:
 
