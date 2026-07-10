@@ -8,7 +8,7 @@ using 'main.bicep'
 param location = 'westeurope'
 param namePrefix = 'redisfx'
 param adminUsername = 'azureuser'
-param vmSize = 'Standard_B1s'
+param vmSize = 'Standard_B2ts_v2'
 
 // Admin SSH public key (staged from ~/.ssh/id_ed25519.pub by deploy.sh).
 param adminPublicKey = loadTextContent('secrets/admin_key.pub')

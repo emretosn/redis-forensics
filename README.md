@@ -4,7 +4,7 @@ Infrastructure-as-Code (Bicep) for a small Azure lab that produces a forensic-re
 
 ## What this builds
 
-Three Ubuntu 22.04 VMs (`Standard_B1s`) in a single VNet in `westeurope`:
+Three Ubuntu 22.04 VMs (`Standard_B2ts_v2`) in a single VNet in `westeurope`:
 
 | VM             | Role                                                           | Public IP |
 | -------------- | -------------------------------------------------------------- | --------- |

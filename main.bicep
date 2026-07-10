@@ -24,7 +24,7 @@ param adminPublicKey string
 param adminSourceAddress string
 
 @description('VM size for all three VMs.')
-param vmSize string = 'Standard_B1s'
+param vmSize string = 'Standard_B2ts_v2'
 
 @description('Password for the Redis reader ACL user.')
 @secure()

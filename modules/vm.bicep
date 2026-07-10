@@ -9,7 +9,7 @@ param location string
 param vmName string
 
 @description('VM size.')
-param vmSize string = 'Standard_B1s'
+param vmSize string = 'Standard_B2ts_v2'
 
 @description('Admin username for SSH login.')
 param adminUsername string
