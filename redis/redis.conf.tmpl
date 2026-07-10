@@ -1,13 +1,12 @@
 # =============================================================================
-# Redis forensic-readiness configuration (template)
+# Redis forensic-readiness configuration
 #
 # Placeholders substituted by cloud-init on first boot:
-#   __BIND_IP__   -> the VM's private IP address
+#   __BIND_IP__ to the VM's private IP address
 #
-# Implements the Section VI recommendations from Zia & Adedayo (ISDFS 2026):
 #   - verbose server logging
 #   - AOF + RDB persistence preserved
-#   - ACL enforcement (see users.acl) for attribution via ACL LOG
+#   - ACL enforcement, through users.acl, for attribution via ACL LOG
 # =============================================================================
 
 # --- Network -----------------------------------------------------------------
@@ -25,15 +24,18 @@ aclfile /etc/redis/users.acl
 loglevel verbose
 logfile /var/log/redis/redis-server.log
 
-# --- RDB persistence (Section VI: preserve RDB) ------------------------------
+# --- RDB persistence ---------------------------------------------------------
 # Save a point-in-time snapshot on these thresholds; also triggerable via SAVE/BGSAVE.
-save 900 1
-save 300 10
-save 60 10000
+# Production thresholds:
+# save 900 1
+# save 300 10
+# save 60 10000
+# Test:
+save 3 1
 dbfilename dump.rdb
 dir /var/lib/redis
 
-# --- AOF persistence (Section VI: preserve AOF) ------------------------------
+# --- AOF persistence ---------------------------------------------------------
 appendonly yes
 appendfilename "appendonly.aof"
 appendfsync everysec

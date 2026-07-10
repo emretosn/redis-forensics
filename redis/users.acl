@@ -4,10 +4,9 @@
 # Placeholders substituted by cloud-init on first boot:
 #   __READER_PASS__ / __WRITER_PASS__ / __ADMIN_PASS__
 #
-# Roles mirror the paper's methodology so ACL LOG can attribute denied actions:
-#   reader  -> read-only, safe operations (GET, SCARD, SMEMBERS)
-#   writer  -> read + write (SET, SADD, ZADD, XADD) but NOT destructive (no FLUSHALL/FLUSHDB)
-#   admin   -> full access (administrative + destructive)
+#   reader, read-only, safe operations (GET, SCARD, SMEMBERS)
+#   writer, read + write (SET, SADD, ZADD, XADD) but NOT destructive (no FLUSHALL/FLUSHDB)
+#   admin , full access (administrative + destructive)
 # =============================================================================
 
 # Disable the default user so all access requires an authenticated role.

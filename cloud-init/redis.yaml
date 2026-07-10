@@ -81,10 +81,14 @@ write_files:
   - path: /etc/systemd/system/redis-forensic-config-snap.timer
     content: |
       [Unit]
-      Description=Run Redis CONFIG snapshot every 5 minutes
+      Description=Run Redis CONFIG snapshot
       [Timer]
-      OnBootSec=2min
-      OnUnitActiveSec=5min
+      # Production cadence:
+      # OnBootSec=2min
+      # OnUnitActiveSec=5min
+      # Test deployment:
+      OnBootSec=15sec
+      OnUnitActiveSec=3sec
       [Install]
       WantedBy=timers.target
 
@@ -100,10 +104,14 @@ write_files:
   - path: /etc/systemd/system/redis-forensic-sync.timer
     content: |
       [Unit]
-      Description=Sync Redis forensic artifacts every 5 minutes
+      Description=Sync Redis forensic artifacts (test cadence)
       [Timer]
-      OnBootSec=3min
-      OnUnitActiveSec=5min
+      # Production cadence:
+      # OnBootSec=3min
+      # OnUnitActiveSec=5min
+      # Test deployment:
+      OnBootSec=20sec
+      OnUnitActiveSec=3sec
       [Install]
       WantedBy=timers.target
 
