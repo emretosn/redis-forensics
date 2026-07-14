@@ -29,8 +29,8 @@ if [ ! -f "$ADMIN_PUBKEY_PATH" ]; then
 fi
 cp "$ADMIN_PUBKEY_PATH" "${SECRETS_DIR}/admin_key.pub"
 
-# --- 2. Ensure collector keypair exists -------------------------------------
-"${REPO_ROOT}/scripts/gen-collector-key.sh"
+# --- 2. Ensure pull keypair exists ------------------------------------------
+"${REPO_ROOT}/scripts/gen-pull-key.sh"
 
 # --- 3. Determine SSH source address ----------------------------------------
 # Your egress IP can drift within a NAT pool. To keep SSH working across a test

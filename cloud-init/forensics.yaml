@@ -1,35 +1,66 @@
 #cloud-config
 # =============================================================================
-# forensics-vm first-boot configuration.
-# Creates a 'collector' user whose SSH authorized_keys accepts the redis-vm
-# collector key, and prepares the evidence store directory. redis-vm pushes
-# forensic artifacts here via rsync over SSH. The __COLLECTOR_PUBKEY__
-# placeholder is substituted by main.bicep.
+# forensics-vm first-boot configuration (evidence collector).
+# PULL model: this host initiates every transfer, reaching redis-vm over the
+# peered VNet with a dedicated read-only key. redis-vm has NO credentials or
+# network path into this host, so a compromise of the Redis side cannot alter
+# the evidence stored here.
+#
+# The evidence store is write-once / immutable (chattr +i, versioned snapshots,
+# sha256 manifests) so artifacts captured before a compromise stay intact and
+# the RDB/AOF can rebuild the clean state. Placeholders are filled by main.bicep.
 # =============================================================================
 package_update: true
 
-users:
-  - default
-  - name: collector
-    gecos: Redis forensic evidence collector
-    shell: /bin/bash
-    sudo: false
-    lock_passwd: true
-    ssh_authorized_keys:
-      - __COLLECTOR_PUBKEY__
-
 write_files:
-  - path: /etc/systemd/system/forensics-store.service
+  # --- pull runtime config (source host, key path, store locations) ----------
+  - path: /etc/redis-forensics/pull.env
+    permissions: '0644'
+    owner: root:root
+    encoding: b64
+    content: __PULL_ENV_B64__
+
+  # --- private key used to pull evidence from redis-vm (read-only on the source)
+  - path: /etc/redis-forensics/pull_key
+    permissions: '0600'
+    owner: root:root
+    encoding: b64
+    content: __PULL_KEY_B64__
+
+  # --- the pull/immutability script ------------------------------------------
+  - path: /usr/local/bin/forensic-pull.sh
+    permissions: '0755'
+    encoding: b64
+    content: __PULL_B64__
+
+  # --- systemd units (static) ------------------------------------------------
+  - path: /etc/systemd/system/forensic-pull.service
     content: |
       [Unit]
-      Description=Prepare forensic evidence store
+      Description=Pull Redis forensic evidence into the immutable store
       [Service]
       Type=oneshot
-      ExecStart=/bin/bash -c 'mkdir -p /var/forensics-store && chown -R collector:collector /var/forensics-store && chmod 750 /var/forensics-store'
+      ExecStart=/usr/local/bin/forensic-pull.sh
+
+  - path: /etc/systemd/system/forensic-pull.timer
+    content: |
+      [Unit]
+      Description=Pull Redis forensic evidence (test cadence)
+      [Timer]
+      # Production cadence:
+      # OnBootSec=3min
+      # OnUnitActiveSec=5min
+      # Test deployment:
+      OnBootSec=30sec
+      OnUnitActiveSec=5sec
+      [Install]
+      WantedBy=timers.target
 
 runcmd:
   - apt-get update
   - DEBIAN_FRONTEND=noninteractive apt-get install -y rsync
-  - mkdir -p /var/forensics-store
-  - chown -R collector:collector /var/forensics-store
+  # Evidence store (root-owned; the pull service runs as root to set chattr +i).
+  - mkdir -p /var/forensics-store/redis-vm /var/lib/forensic-pull
   - chmod 750 /var/forensics-store
+  - systemctl daemon-reload
+  - systemctl enable --now forensic-pull.timer

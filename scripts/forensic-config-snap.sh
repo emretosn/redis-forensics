@@ -4,6 +4,7 @@
 # Run on a systemd timer; writes a timestamped dump of the full runtime config so
 # unauthorized configuration changes can be detected by diffing snapshots.
 set -euo pipefail
+umask 027
 
 ENV_FILE="${FORENSICS_ENV:-/etc/redis-forensics/forensics.env}"
 # shellcheck source=/dev/null

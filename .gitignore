@@ -6,6 +6,7 @@ id_rsa*
 *_rsa
 *_rsa.pub
 collector_key*
+pull_key*
 
 # Bicep build output
 *.json

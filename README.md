@@ -4,48 +4,72 @@ Infrastructure-as-Code (Bicep) for a small Azure lab that produces a forensic-re
 
 ## What this builds
 
-Three Ubuntu 22.04 VMs (`Standard_B2ts_v2`) in a single VNet in `westeurope`:
+Three Ubuntu 22.04 VMs (`Standard_B2ts_v2`) in `westeurope`, across **two peered VNets** so
+the collector is network-isolated from the Redis source:
 
-| VM             | Role                                                           | Public IP |
-| -------------- | -------------------------------------------------------------- | --------- |
-| `redis-vm`     | Redis installed **in the VM**, configured as a forensic source | No        |
-| `client-vm`    | Issues CRUD requests to Redis using ACL role users             | Yes (SSH) |
-| `forensics-vm` | Collector — receives forensic files pushed from `redis-vm`     | Yes (SSH) |
+| VM             | Role                                                                | VNet | Public IP |
+| -------------- | ------------------------------------------------------------------- | ---- | --------- |
+| `redis-vm`     | Redis installed **in the VM**, configured as a forensic source      | A `10.0.0.0/16` | No |
+| `client-vm`    | Issues CRUD requests to Redis using ACL role users                  | A `10.0.0.0/16` | Yes (SSH) |
+| `forensics-vm` | Collector — **pulls** forensic files from `redis-vm`, stores immutably | B `10.1.0.0/16` | Yes (SSH) |
+
+VNet-A and VNet-B are connected by **VNet peering**, so `forensics-vm` reaches `redis-vm` over
+private IPs on the Azure backbone. In production, swap the peering for a Private Link Service
+and nothing else changes.
 
 ## Forensic features (from the paper, Section VI)
 
 - **Verbose server logging** — `loglevel verbose`, persisted logfile.
-- **Continuous MONITOR capture** — systemd service tailing `redis-cli MONITOR` to a file.
-- **AOF + RDB preserved** — `appendonly yes` and `save` snapshots, synced to the collector.
+- **Continuous MONITOR capture** — systemd service tailing `redis-cli MONITOR`, sealed and
+  rotated into complete, immutable segments.
+- **AOF + RDB preserved** — `appendonly yes` and `save` snapshots, collected as versioned
+  immutable copies on the collector.
 - **Periodic CONFIG GET snapshots** — systemd timer writing timestamped `CONFIG GET *` dumps.
 - **ACL roles** — `reader` / `writer` / `admin`, enabling **ACL LOG** attribution of denied actions.
 - **Simple seed data** — a handful of plain `key:value` pairs.
 
-Forensic files are pushed from `redis-vm` to `forensics-vm` via `rsync` over SSH on a
-systemd timer (push model → keeps evidence on a separate host for chain-of-custody).
+### Evidence flow: pull model + immutable store
+
+Evidence is collected with a **pull model** for chain-of-custody. `redis-vm` consolidates all
+artifacts under a single evidence root (`/var/forensics`) exposed by a restricted, read-only
+`evidence` user (SSH key locked to an `rrsync -ro` forced command). `forensics-vm` initiates
+every transfer on a systemd timer and holds the only key. **`redis-vm` holds no credentials to,
+and has no network path into, the collector** — so a full compromise of the Redis side cannot
+reach or alter already-collected evidence.
+
+On the collector the store is **write-once / immutable**:
+
+- `monitor` / `config` / `acl`: unique filenames, copied once, then `chattr +i`.
+- `data` / `log`: per-pull **timestamped snapshot dirs**, `chattr +i`, deduped by `sha256`
+  so unchanged RDB/AOF/log are not re-stored.
+- `manifest`: a `sha256` manifest per pull cycle (immutable) for integrity verification.
+
+Because evidence is immutable, freeing space is a deliberate, privileged action — nothing is
+ever silently overwritten or auto-deleted. See **Retention** below.
 
 ## Repository layout
 
 ```
-├── main.bicep                  # orchestration
-├── main.bicepparam             # parameter values
+├── main.bicep                      # orchestration
+├── main.bicepparam                 # parameter values
 ├── modules/
-│   ├── network.bicep           # VNet, subnet, NSGs, public IPs, NICs
-│   └── vm.bicep                # reusable Linux VM
-├── cloud-init/                 # per-VM first-boot configuration
+│   ├── network.bicep               # two peered VNets, subnets, NSGs, public IPs, NICs
+│   └── vm.bicep                    # reusable Linux VM
+├── cloud-init/                     # per-VM first-boot configuration
 │   ├── redis.yaml
 │   ├── client.yaml
 │   └── forensics.yaml
 ├── redis/
-│   ├── redis.conf.tmpl         # verbose, AOF, RDB, bind
-│   └── users.acl               # reader / writer / admin
+│   ├── redis.conf.tmpl             # verbose, AOF, RDB, bind
+│   └── users.acl                   # reader / writer / admin
 ├── scripts/
-│   ├── gen-collector-key.sh    # generate collector SSH keypair
-│   ├── forensic-monitor.sh     # continuous MONITOR capture
-│   ├── forensic-config-snap.sh # CONFIG GET * snapshot
-│   ├── forensic-sync.sh        # rsync to forensics-vm
-│   └── seed-data.sh            # simple key:value seed
-└── deploy.sh                   # az deployment wrapper
+│   ├── gen-pull-key.sh             # generate the forensics->redis read-only pull keypair
+│   ├── forensic-monitor.sh         # continuous MONITOR capture (seal-and-rotate)
+│   ├── forensic-config-snap.sh     # CONFIG GET * snapshot
+│   ├── forensic-export-local.sh    # redis-vm: ACL LOG + BGSAVE + mirror rdb/aof/log
+│   ├── forensic-pull.sh            # forensics-vm: pull + immutable versioned store
+│   └── seed-data.sh                # simple key:value seed
+└── deploy.sh                       # az deployment wrapper
 ```
 
 ## Prerequisites
@@ -56,8 +80,8 @@ systemd timer (push model → keeps evidence on a separate host for chain-of-cus
 ## Quick start
 
 ```bash
-# 1. Generate the collector keypair (VM -> collector transfer)
-./scripts/gen-collector-key.sh
+# 1. Generate the pull keypair (forensics-vm -> redis-vm read-only transfer)
+./scripts/gen-pull-key.sh
 
 # 2. Deploy (stages keys, detects your IP, generates ACL passwords, deploys)
 ./deploy.sh
@@ -74,7 +98,7 @@ and writes the generated Redis ACL passwords to `secrets/passwords.env` (git-ign
 | `LOCATION`                 | `westeurope`               | Azure region                                |
 | `ADMIN_PUBKEY_PATH`        | `~/.ssh/id_ed25519.pub`    | Admin SSH public key                        |
 | `ADMIN_SOURCE_ADDRESS`     | auto-detected, widened     | Source IP/CIDR allowed to SSH               |
-| `ADMIN_SOURCE_PREFIX_BITS` | `23`                       | Widening of the auto-detected IP (`32`=exact) |
+| `ADMIN_SOURCE_PREFIX_BITS` | `23`                       | Widening of the auto-detected IP            |
 | `REDIS_*_PASS`             | generated (hex)            | reader / writer / admin ACL passwords       |
 
 By default the auto-detected public IP is widened to its containing `/23` so SSH keeps
@@ -129,19 +153,54 @@ Then confirm the forensic artifacts landed on the collector:
 ```bash
 ssh azureuser@<forensics-public-ip>
 sudo ls -R /var/forensics-store/redis-vm
-#   forensics/monitor/    -> continuous MONITOR capture
-#   forensics/config/     -> periodic CONFIG GET snapshots
-#   forensics/acl/        -> exported ACL LOG (denied FLUSHALL attempts)
-#   data/                 -> dump.rdb + appendonly.aof
-#   log/                  -> redis-server.log (verbose)
+#   monitor/            -> sealed, immutable MONITOR segments (monitor-<ts>.log)
+#   config/             -> periodic CONFIG GET snapshots
+#   acl/                -> exported ACL LOG (denied FLUSHALL attempts)
+#   data/<pull-ts>/     -> versioned dump.rdb + appendonlydir snapshots
+#   log/<pull-ts>/      -> versioned redis-server.log (verbose)
+#   manifest/           -> sha256 manifest per pull cycle (integrity)
+
+# Evidence is immutable: try to tamper and it is refused.
+sudo sh -c 'echo x >> /var/forensics-store/redis-vm/config/'*.txt   # -> Operation not permitted
+lsattr /var/forensics-store/redis-vm/config/*.txt                   # -> ----i--------- (immutable)
 ```
 
-The `redis-vm` pushes these every 5 minutes via a systemd timer
-(`redis-forensic-sync.timer`); MONITOR capture runs continuously
-(`redis-forensic-monitor.service`).
+The `forensics-vm` **pulls** these on a systemd timer (`forensic-pull.timer`); `redis-vm`
+refreshes the evidence root via `redis-forensic-export.timer`, and MONITOR capture runs
+continuously (`redis-forensic-monitor.service`) with sealed segments rolled by
+`redis-forensic-monitor-rotate.timer`.
+
+## Threat model & why the pull model
+
+The design assumes `redis-vm` (or an app talking to it) may be fully compromised. To keep the
+evidence trustworthy:
+
+- **Pull, not push.** `forensics-vm` initiates all transfers and holds the only key.
+  `redis-vm` has no credential to the collector, and the collector's NSG allows no inbound from
+  `redis-vm`. A rooted `redis-vm` therefore has no path to the evidence store.
+- **Least privilege at the source.** The pull key is locked to `rrsync -ro /var/forensics`
+  (read-only, rooted at the evidence tree, no shell).
+- **Immutable, versioned sink.** `chattr +i` plus per-pull snapshots mean evidence captured
+  *before* a compromise is frozen; the attacker can stop producing new truthful evidence but
+  cannot rewrite history. The point-in-time RDB/AOF can rebuild the clean state.
+- **Network isolation.** Collector lives in a separate, peered VNet — production would use a
+  Private Link Service to expose only the single pull endpoint.
+
+## Retention
+
+Evidence is never auto-deleted. When you need to reclaim space, prune deliberately (this clears
+the immutable flag first, so it is an explicit, auditable act):
+
+```bash
+ssh azureuser@<forensics-public-ip>
+# Example: drop immutable evidence older than 30 days.
+sudo find /var/forensics-store/redis-vm -type f -mtime +30 -exec chattr -i {} + \
+  -exec rm -f {} +
+```
 
 ## Teardown
 
 ```bash
-az group delete --name redis-forensics-rg --yes
+az group delete --name rg-redis-forensics --yes
 ```
+

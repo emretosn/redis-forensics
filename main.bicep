@@ -38,12 +38,12 @@ param writerPassword string
 @secure()
 param adminPassword string
 
-@description('Private SSH key redis-vm uses to push evidence to forensics-vm.')
+@description('Private SSH key forensics-vm uses to PULL evidence from redis-vm.')
 @secure()
-param collectorPrivateKey string
+param pullPrivateKey string
 
-@description('Public SSH key added to forensics-vm authorized_keys for the collector user.')
-param collectorPublicKey string
+@description('Public SSH key added to the restricted evidence user on redis-vm.')
+param pullPublicKey string
 
 // --- Networking --------------------------------------------------------------
 
@@ -58,11 +58,10 @@ module net 'modules/network.bicep' = {
 
 // --- cloud-init assembly: redis-vm -------------------------------------------
 
-// forensics.env with admin password + collector (forensics-vm) private IP.
-var redisEnvB64 = base64(replace(replace(
+// forensics.env with the Redis admin password (local-only; no collector creds).
+var redisEnvB64 = base64(replace(
   loadTextContent('cloud-init/forensics.env.tmpl'),
-  '__ADMIN_PASS__', adminPassword),
-  '__COLLECTOR_HOST__', net.outputs.forensicsPrivateIp))
+  '__ADMIN_PASS__', adminPassword))
 
 // redis.conf with the bind IP set to redis-vm's private address.
 var redisConfB64 = base64(replace(
@@ -76,10 +75,9 @@ var usersAclB64 = base64(replace(replace(replace(
   '__WRITER_PASS__', writerPassword),
   '__ADMIN_PASS__', adminPassword))
 
-var collectorKeyB64 = base64(collectorPrivateKey)
 var monitorB64 = base64(loadTextContent('scripts/forensic-monitor.sh'))
 var configSnapB64 = base64(loadTextContent('scripts/forensic-config-snap.sh'))
-var syncB64 = base64(loadTextContent('scripts/forensic-sync.sh'))
+var exportB64 = base64(loadTextContent('scripts/forensic-export-local.sh'))
 var seedB64 = base64(loadTextContent('scripts/seed-data.sh'))
 
 var redisCustomData = base64(replace(replace(replace(replace(replace(replace(replace(replace(
@@ -87,10 +85,10 @@ var redisCustomData = base64(replace(replace(replace(replace(replace(replace(rep
   '__ENV_B64__', redisEnvB64),
   '__REDIS_CONF_B64__', redisConfB64),
   '__USERS_ACL_B64__', usersAclB64),
-  '__COLLECTOR_KEY_B64__', collectorKeyB64),
+  '__PULL_PUBKEY__', trim(pullPublicKey)),
   '__MONITOR_B64__', monitorB64),
   '__CONFIGSNAP_B64__', configSnapB64),
-  '__SYNC_B64__', syncB64),
+  '__EXPORT_B64__', exportB64),
   '__SEED_B64__', seedB64))
 
 // --- cloud-init assembly: client-vm ------------------------------------------
@@ -108,9 +106,19 @@ var clientCustomData = base64(replace(replace(
 
 // --- cloud-init assembly: forensics-vm ---------------------------------------
 
-var forensicsCustomData = base64(replace(
+// pull.env with the redis-vm private IP as the evidence source host.
+var pullEnvB64 = base64(replace(
+  loadTextContent('cloud-init/pull.env.tmpl'),
+  '__REDIS_HOST__', net.outputs.redisPrivateIp))
+
+var pullKeyB64 = base64(pullPrivateKey)
+var pullScriptB64 = base64(loadTextContent('scripts/forensic-pull.sh'))
+
+var forensicsCustomData = base64(replace(replace(replace(
   loadTextContent('cloud-init/forensics.yaml'),
-  '__COLLECTOR_PUBKEY__', collectorPublicKey))
+  '__PULL_ENV_B64__', pullEnvB64),
+  '__PULL_KEY_B64__', pullKeyB64),
+  '__PULL_B64__', pullScriptB64))
 
 // --- Virtual machines --------------------------------------------------------
 
