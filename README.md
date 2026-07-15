@@ -17,7 +17,7 @@ VNet-A and VNet-B are connected by **VNet peering**, so `forensics-vm` reaches `
 private IPs on the Azure backbone. In production, swap the peering for a Private Link Service
 and nothing else changes.
 
-## Forensic features (from the paper, Section VI)
+## Forensic features
 
 - **Verbose server logging** — `loglevel verbose`, persisted logfile.
 - **Continuous MONITOR capture** — systemd service tailing `redis-cli MONITOR`, sealed and
