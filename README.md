@@ -204,3 +204,21 @@ sudo find /var/forensics-store/redis-vm -type f -mtime +30 -exec chattr -i {} + 
 az group delete --name rg-redis-forensics --yes
 ```
 
+### Update the Admin IP
+```bash
+MYIP="$(curl -s https://api.ipify.org)/32"
+
+# Both the NIC-level and subnet-level NSGs gate SSH, so the admin rule must be
+# updated on both for each publicly reachable VM:
+#   client   : redisfx-client-nsg    (NIC) + redisfx-vnet-lab-nsg-westeurope (lab subnet)
+#   forensics: redisfx-forensics-nsg (NIC) + redisfx-fx-vnet-fx-nsg-westeurope (fx subnet)
+for nsg in \
+  redisfx-client-nsg redisfx-vnet-lab-nsg-westeurope \
+  redisfx-forensics-nsg redisfx-fx-vnet-fx-nsg-westeurope; do
+  az network nsg rule create -g rg-redis-forensics --nsg-name "$nsg" \
+    --name allow-ssh-from-admin --priority 100 \
+    --direction Inbound --access Allow --protocol Tcp \
+    --source-address-prefixes "$MYIP" --source-port-ranges '*' \
+    --destination-address-prefixes '*' --destination-port-ranges 22
+done
+```
